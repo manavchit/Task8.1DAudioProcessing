@@ -2,59 +2,64 @@ import speech_recognition as sr
 import RPi.GPIO as GPIO
 import time
 
-# Setup GPIO for LED control
-GPIO.setmode(GPIO.BCM)  # Use Broadcom pin numbering
-GPIO.setwarnings(False)  # Disable warnings
-LED_PIN = 18  # GPIO pin where LED is connected
-GPIO.setup(LED_PIN, GPIO.OUT)  # Set pin as output
-GPIO.output(LED_PIN, GPIO.LOW)  # Ensure LED starts off
+# GPIO pin configuration for the light
+LIGHT_GPIO_PIN = 18  # Adjust based on your wiring
 
-# Function to switch light ON
-def light_on():
-    GPIO.output(LED_PIN, GPIO.HIGH)  # Turn LED on
+# GPIO setup
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(LIGHT_GPIO_PIN, GPIO.OUT)
+
+def turn_light_on():
+    """Turn the light ON by setting the GPIO pin high."""
+    GPIO.output(LIGHT_GPIO_PIN, GPIO.HIGH)
     print("Light ON")
 
-# Function to switch light OFF
-def light_off():
-    GPIO.output(LED_PIN, GPIO.LOW)  # Turn LED off
+def turn_light_off():
+    """Turn the light OFF by setting the GPIO pin low."""
+    GPIO.output(LIGHT_GPIO_PIN, GPIO.LOW)
     print("Light OFF")
 
-# Setup Speech Recognizer
-recognizer = sr.Recognizer()  # Initialize recognizer
-
 def listen_for_command():
-    with sr.Microphone() as source:
-        print("Listening for command...")
-        recognizer.adjust_for_ambient_noise(source)  # Adjust mic sensitivity for background noise
-        audio = recognizer.listen(source)  # Listen for command
+    """Listen to user's voice commands and return recognized text."""
+    recognizer = sr.Recognizer()
+    microphone = sr.Microphone()
 
     try:
-        # Recognize speech using Google Web Speech API
-        command = recognizer.recognize_google(audio).lower()  # Convert speech to text
-        print(f"You said: {command}")
+        with microphone as source:
+            print("Adjusting for background noise... Please wait.")
+            recognizer.adjust_for_ambient_noise(source)  # Reduce background noise
+            print("Listening for command...")
+            audio_data = recognizer.listen(source)  # Capture the audio
 
-        # Check command and control light accordingly
-        if "light on" in command:
-            light_on()
-        elif "light off" in command:
-            light_off()
-        else:
-            print("Command not recognized, please say 'light on' or 'light off'.")
-
+            # Use Google Speech Recognition to convert audio to text
+            command_text = recognizer.recognize_google(audio_data).lower()
+            print(f"Command received: {command_text}")
+            return command_text
     except sr.UnknownValueError:
-        # Handle case when speech is not understood
-        print("Could not understand the command.")
-    except sr.RequestError as e:
-        # Handle errors in requesting results from Google API
-        print(f"Could not request results from Google Speech Recognition service; {e}")
+        print("Sorry, I could not understand the audio.")
+    except sr.RequestError:
+        print("Could not request results from the speech recognition service.")
+    
+    return ""  # Return empty string if recognition fails
 
-try:
-    while True:
-        listen_for_command()  # Continuously listen for commands
-        time.sleep(1)  # Small delay between listening cycles
+def handle_command(command):
+    """Process the recognized command and control the light."""
+    if "light on" in command:
+        turn_light_on()
+    elif "light off" in command:
+        turn_light_off()
+    else:
+        print("Invalid command. Please say 'light on' or 'light off'.")
 
-except KeyboardInterrupt:
-    # Gracefully exit on user interruption
-    print("Exiting program")
-finally:
-    GPIO.cleanup()  # Reset GPIO state on exit
+if _name_ == "_main_":
+    try:
+        while True:
+            # Continuously listen for commands and process them
+            voice_command = listen_for_command()
+            if voice_command:
+                handle_command(voice_command)
+            time.sleep(1)  # Add a short delay to avoid rapid looping
+    except KeyboardInterrupt:
+        print("Program terminated by user.")
+    finally:
+        GPIO.cleanup()  # Reset GPIO settings before exiting
